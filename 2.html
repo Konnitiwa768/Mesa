@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>地層シミュレーション</title>
+  <style>
+    canvas { border: 1px solid #444; display: block; margin: 1em auto; }
+    #controls { text-align: center; margin-bottom: 1em; }
+    button, input { margin: 0.5em; }
+    body { background: #000; color: #fff; font-family: sans-serif; }
+  </style>
+</head>
+<body>
+
+<div id="controls">
+  <label>砂の色: <input type="color" id="colorPicker" value="#d2b48c"></label>
+  <button onclick="toggleRamp()">斜め板ON/OFF</button>
+  <button onclick="shake()">振動</button>
+  <button onclick="explode()">爆発</button>
+  <button onclick="reset()">リセット</button>
+</div>
+
+<canvas id="world"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js"></script>
+<script>
+const { Engine, Render, Runner, World, Bodies, Body, Events, Composite } = Matter;
+
+const engine = Engine.create();
+const world = engine.world;
+
+const canvas = document.getElementById('world');
+canvas.width = 800;
+canvas.height = 600;
+
+const render = Render.create({
+  canvas: canvas,
+  engine: engine,
+  options: {
+    width: 800,
+    height: 600,
+    wireframes: false,
+    background: '#000'
+  }
+});
+
+Render.run(render);
+Runner.run(Runner.create(), engine);
+
+// 固定壁・地面
+const ground = Bodies.rectangle(400, 610, 810, 20, { isStatic: true });
+const leftWall = Bodies.rectangle(0, 300, 20, 600, { isStatic: true });
+const rightWall = Bodies.rectangle(800, 300, 20, 600, { isStatic: true });
+World.add(world, [ground, leftWall, rightWall]);
+
+// 斜め板
+let ramp = Bodies.rectangle(600, 300, 721, 20, {
+  isStatic: true,
+  angle: Math.atan2(600, 400), // 600/400 = tan(θ)
+  render: { fillStyle: '#666' }
+});
+World.add(world, ramp);
+let rampVisible = true;
+
+function toggleRamp() {
+  rampVisible = !rampVisible;
+  if (rampVisible) {
+    World.add(world, ramp);
+  } else {
+    World.remove(world, ramp);
+  }
+}
+
+const maxSandCount = 300;
+let sandList = [];
+
+canvas.addEventListener('click', function(event) {
+  const rect = canvas.getBoundingClientRect();
+  const baseX = event.clientX - rect.left;
+  const baseY = event.clientY - rect.top;
+  const color = document.getElementById('colorPicker').value;
+
+  for (let i = 0; i < 20; i++) {
+    const offsetX = (Math.random() - 0.5) * 30;
+    const offsetY = (Math.random() - 0.5) * 30;
+    const sand = Bodies.circle(baseX + offsetX, baseY + offsetY, 4, {
+      restitution: 0.1,
+      friction: 0.3,
+      render: { fillStyle: color }
+    });
+    World.add(world, sand);
+    sandList.push(sand);
+  }
+
+  // 軽量化（古い砂を削除）
+  if (sandList.length > maxSandCount) {
+    const removeCount = sandList.length - maxSandCount;
+    const toRemove = sandList.splice(0, removeCount);
+    for (const s of toRemove) {
+      World.remove(world, s);
+    }
+  }
+});
+
+function shake() {
+  const bodies = Composite.allBodies(world);
+  for (const body of bodies) {
+    if (!body.isStatic) {
+      const fx = (Math.random() - 0.5) * 0.01;
+      const fy = (Math.random() - 0.5) * 0.01;
+      Body.applyForce(body, body.position, { x: fx, y: fy });
+    }
+  }
+}
+
+function explode() {
+  const bodies = Composite.allBodies(world);
+  for (const body of bodies) {
+    if (!body.isStatic && Math.random() < 0.3) {
+      const fx = (Math.random() - 0.5) * 0.05;
+      const fy = (Math.random() - 0.5) * 0.05;
+      Body.applyForce(body, body.position, { x: fx, y: fy });
+    }
+  }
+}
+
+function reset() {
+  for (const body of sandList) {
+    World.remove(world, body);
+  }
+  sandList = [];
+}
+
+</script>
+
+</body>
+</html>
